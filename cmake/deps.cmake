@@ -74,7 +74,8 @@ list(APPEND WEBP_DEP_IMG_LIBRARIES JPEG::jpeg)
 set(WEBP_HAVE_JPEG 1)
 set(JPEG_FOUND 1)
 
-if(MSYS)
+# YOUI: note that this must match the WebPConfig.cmake.in
+if(MSYS OR TVOS OR UWP)
     # TIFF is currently not supported by hunter on MSYS
     # https://github.com/ingenue/hunter/blob/pkg.tiff/appveyor.yml#L33
     set(WEBP_HAVE_TIFF 0)
@@ -87,7 +88,8 @@ else()
     set(TIFF_FOUND 1)
 endif()
 
-if(ANDROID OR MINGW OR MSYS)
+# YOUI: note that this must match the WebPConfig.cmake.in
+if(NOT WEBP_BUILD_GIF2WEBP OR ANDROID OR MINGW OR MSYS OR TVOS OR UWP)
     # giflib is currently not supported by hunter on Android, MinGW and MSYS
     # https://github.com/ingenue/hunter/blob/pkg.giflib/.travis.yml#L36-L44
     # https://github.com/ingenue/hunter/blob/pkg.giflib/appveyor.yml#L30-L38

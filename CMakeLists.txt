@@ -102,6 +102,26 @@ parse_Makefile_am(${WEBP_SRC_DIR}/utils "WEBP_UTILS_COMMON_SRCS" "COMMON")
 parse_Makefile_am(${WEBP_SRC_DIR}/utils "WEBP_UTILS_ENC_SRCS" "ENC")
 parse_Makefile_am(${WEBP_SRC_DIR}/utils "WEBP_UTILS_DEC_SRCS" "decode_[^ ]*")
 
+if(IOS OR TVOS)
+  # Support iOS universal build
+  list(
+      REMOVE_ITEM
+      WEBP_SIMD_FILES_NOT_TO_INCLUDE
+      "${CMAKE_CURRENT_LIST_DIR}/src/dsp/lossless_sse2.c"
+      "${CMAKE_CURRENT_LIST_DIR}/src/dsp/cost_sse2.c"
+      "${CMAKE_CURRENT_LIST_DIR}/src/dsp/filters_sse2.c"
+      "${CMAKE_CURRENT_LIST_DIR}/src/dsp/upsampling_sse2.c"
+      "${CMAKE_CURRENT_LIST_DIR}/src/dsp/yuv_sse2.c"
+      "${CMAKE_CURRENT_LIST_DIR}/src/dsp/ssim_sse2.c"
+      "${CMAKE_CURRENT_LIST_DIR}/src/dsp/rescaler_sse2.c"
+      "${CMAKE_CURRENT_LIST_DIR}/src/dsp/lossless_enc_sse2.c"
+      "${CMAKE_CURRENT_LIST_DIR}/src/dsp/dec_sse2.c"
+      "${CMAKE_CURRENT_LIST_DIR}/src/dsp/enc_sse2.c"
+      "${CMAKE_CURRENT_LIST_DIR}/src/dsp/alpha_processing_sse2.c"
+      "${CMAKE_CURRENT_LIST_DIR}/src/dsp/common_sse2.h"
+  )
+endif()
+
 # Remove the files specific to SIMD we don't use.
 foreach(FILE ${WEBP_SIMD_FILES_NOT_TO_INCLUDE})
   list(REMOVE_ITEM WEBP_DSP_ENC_SRCS ${FILE})
