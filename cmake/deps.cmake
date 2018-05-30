@@ -58,7 +58,7 @@ set(LT_OBJDIR ".libs/")
 
 # Find the standard C math library.
 find_library(MATH_LIBRARY NAMES m)
-if(MATH_LIBRARY)
+if(MATH_LIBRARY OR ROKU)
   list(APPEND WEBP_DEP_LIBRARIES m)
 endif()
 
