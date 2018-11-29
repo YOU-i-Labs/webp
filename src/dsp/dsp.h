@@ -116,7 +116,7 @@ extern "C" {
 #define WEBP_DSP_OMIT_C_CODE 1
 #endif
 
-#if (defined(__aarch64__) || defined(__ARM_NEON__)) && WEBP_DSP_OMIT_C_CODE
+#if (defined(__aarch64__) || defined(__ARM_NEON__)) && WEBP_DSP_OMIT_C_CODE && defined(WEBP_USE_NEON)
 #define WEBP_NEON_OMIT_C_CODE 1
 #else
 #define WEBP_NEON_OMIT_C_CODE 0
