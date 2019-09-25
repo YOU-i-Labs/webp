@@ -1,7 +1,12 @@
 @PACKAGE_INIT@
 
-find_package(PNG CONFIG REQUIRED)
-find_package(JPEG CONFIG REQUIRED)
+if (@WEBP_HAVE_PNG@)
+	find_package(PNG CONFIG REQUIRED)
+endif()
+
+if (@WEBP_HAVE_JPEG@)
+	find_package(JPEG CONFIG REQUIRED)
+endif()
 
 if(FALSE)
     # TIFF is currently not supported by hunter on MSYS
