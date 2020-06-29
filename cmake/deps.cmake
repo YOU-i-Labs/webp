@@ -44,8 +44,8 @@ set(WEBP_USE_THREAD ${Threads_FOUND})
 set(LT_OBJDIR ".libs/")
 
 # Only useful for vwebp, so useless for now.
-find_package(OpenGL)
-set(WEBP_HAVE_GL ${OPENGL_FOUND})
+#find_package(OpenGL)
+#set(WEBP_HAVE_GL ${OPENGL_FOUND})
 
 # Check if we need to link to the C math library. We do not look for it as it is
 # not found when cross-compiling, while it is here.
@@ -59,6 +59,51 @@ if(NOT HAVE_MATH_LIBRARY)
   message(STATUS "Adding -lm flag.")
   list(APPEND WEBP_DEP_LIBRARIES m)
 endif()
+
+if(HUNTER_ENABLED)
+  
+  set(_YI_HUNTER_SKIP_DEPENDENCIES ON)
+
+  if(_YI_HUNTER_SKIP_DEPENDENCIES)
+      set(WEBP_HAVE_PNG 0)
+      set(PNG_FOUND 0)
+
+      set(WEBP_HAVE_JPEG 0)
+      set(JPEG_FOUND 0)
+
+      set(WEBP_HAVE_TIFF 0)
+      set(TIFF_FOUND 0)
+
+      set(WEBP_HAVE_GIF 0)
+      set(GIF_FOUND 0)
+
+  else()
+    hunter_add_package(PNG)
+    find_package(PNG CONFIG REQUIRED)
+    list(APPEND WEBP_DEP_IMG_LIBRARIES PNG::png)
+    set(WEBP_HAVE_PNG 1)
+    set(PNG_FOUND 1)
+
+    hunter_add_package(Jpeg)
+    find_package(JPEG CONFIG REQUIRED)
+    list(APPEND WEBP_DEP_IMG_LIBRARIES JPEG::jpeg)
+    set(WEBP_HAVE_JPEG 1)
+    set(JPEG_FOUND 1)
+
+    hunter_add_package(TIFF)
+    find_package(TIFF CONFIG REQUIRED)
+    list(APPEND WEBP_DEP_IMG_LIBRARIES TIFF::libtiff)
+    set(WEBP_HAVE_TIFF 1)
+    set(TIFF_FOUND 1)
+
+    hunter_add_package(giflib)
+    find_package(giflib CONFIG REQUIRED)
+    list(APPEND WEBP_DEP_GIF_LIBRARIES giflib::giflib)
+    set(WEBP_HAVE_GIF 1)
+    set(GIF_FOUND 1)
+
+  endif()
+else()
 
 # Find the standard image libraries.
 set(WEBP_DEP_IMG_LIBRARIES)
@@ -104,6 +149,8 @@ if(GIF_FOUND)
   else()
     unset(GIF_FOUND)
   endif()
+endif()
+
 endif()
 
 # Check for specific headers.

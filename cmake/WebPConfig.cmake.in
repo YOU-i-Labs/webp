@@ -3,9 +3,36 @@ set(WEBP_VERSION ${WebP_VERSION})
 
 @PACKAGE_INIT@
 
+if (@WEBP_HAVE_PNG@)
+	find_package(PNG CONFIG REQUIRED)
+endif()
+
+if (@WEBP_HAVE_JPEG@)
+	find_package(JPEG CONFIG REQUIRED)
+endif()
+
+if (@WEBP_HAVE_TIFF@)
+    # TIFF is currently not supported by hunter on MSYS
+    # https://github.com/ingenue/hunter/blob/pkg.tiff/appveyor.yml#L33
+    find_package(TIFF CONFIG REQUIRED)
+endif()
+
+if (@WEBP_HAVE_GIF@)
+    # giflib is currently not supported by hunter on Android, MinGW and MSYSa
+    # https://github.com/ingenue/hunter/blob/pkg.giflib/.travis.yml#L36-L44
+    # https://github.com/ingenue/hunter/blob/pkg.giflib/appveyor.yml#L30-L38
+    find_package(giflib CONFIG REQUIRED)
+endif()
+
+check_required_components("@PROJECT_NAME@")
+
 include ("${CMAKE_CURRENT_LIST_DIR}/@PROJECT_NAME@Targets.cmake")
+
+if(0)
 
 set(WebP_INCLUDE_DIRS "webp")
 set(WEBP_INCLUDE_DIRS ${WebP_INCLUDE_DIRS})
 set(WebP_LIBRARIES "@INSTALLED_LIBRARIES@")
 set(WEBP_LIBRARIES "${WebP_LIBRARIES}")
+
+endif()

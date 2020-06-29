@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.5)
 
+include("cmake/HunterGate.cmake")
+HunterGate(
+    URL "https://github.com/ruslo/hunter/archive/v0.23.126.tar.gz"
+    SHA1 "ccaf37e820cb54d6a5c02993c7f389b9861fc38e"
+)
+
 project(WebP C)
 
 # Options for coder / decoder executables.
@@ -72,6 +78,8 @@ set(libdir "\$\{prefix\}/lib")
 set(includedir "\$\{prefix\}/include")
 set(PTHREAD_LIBS ${CMAKE_THREAD_LIBS_INIT})
 set(INSTALLED_LIBRARIES)
+
+set(INSTALLED_LIBRARIES "")
 
 # ##############################################################################
 # Android only.
@@ -187,10 +195,11 @@ target_include_directories(webputilsdecode
                            PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
                                    ${CMAKE_CURRENT_SOURCE_DIR})
 add_library(webpdecoder
+            dummy.c
             $<TARGET_OBJECTS:webpdecode>
             $<TARGET_OBJECTS:webpdspdecode>
             $<TARGET_OBJECTS:webputilsdecode>)
-target_link_libraries(webpdecoder ${WEBP_DEP_LIBRARIES})
+target_link_libraries(webpdecoder PUBLIC ${WEBP_DEP_LIBRARIES})
 target_include_directories(
   webpdecoder
   PRIVATE ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}
@@ -225,6 +234,7 @@ target_include_directories(webputils
                            PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
                                    ${CMAKE_CURRENT_SOURCE_DIR})
 add_library(webp
+            dummy.c
             $<TARGET_OBJECTS:webpdecode>
             $<TARGET_OBJECTS:webpdsp>
             $<TARGET_OBJECTS:webpencode>
@@ -253,7 +263,7 @@ configure_pkg_config("src/libwebp.pc")
 
 # Build the webp demux library.
 add_library(webpdemux ${WEBP_DEMUX_SRCS})
-target_link_libraries(webpdemux webp)
+target_link_libraries(webpdemux PUBLIC webp)
 target_include_directories(webpdemux
                            PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
                                    ${CMAKE_CURRENT_BINARY_DIR}
@@ -350,7 +360,7 @@ if(WEBP_BUILD_ANIM_UTILS
                     "example_util_[^ ]*")
   list(APPEND EXAMPLEUTIL_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/examples/stopwatch.h)
   add_library(exampleutil STATIC ${EXAMPLEUTIL_SRCS})
-  target_link_libraries(exampleutil imageioutil)
+  target_link_libraries(exampleutil PUBLIC imageioutil)
   target_include_directories(
     exampleutil
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
@@ -360,11 +370,14 @@ if(WEBP_BUILD_ANIM_UTILS
   add_library(imageioutil STATIC ${IMAGEIOUTILS_SRCS})
   target_link_libraries(imageioutil webp)
 
+  target_link_libraries(exampleutil PUBLIC imageioutil)
+
   # Image-decoding utility library.
   parse_makefile_am(${CMAKE_CURRENT_SOURCE_DIR}/imageio "IMAGEDEC_SRCS"
                     "imagedec_[^ ]*")
   add_library(imagedec STATIC ${IMAGEDEC_SRCS})
   target_link_libraries(imagedec
+                        PUBLIC
                         imageioutil
                         webpdemux
                         webp
@@ -374,7 +387,8 @@ if(WEBP_BUILD_ANIM_UTILS
   parse_makefile_am(${CMAKE_CURRENT_SOURCE_DIR}/imageio "IMAGEENC_SRCS"
                     "imageenc_[^ ]*")
   add_library(imageenc STATIC ${IMAGEENC_SRCS})
-  target_link_libraries(imageenc imageioutil webp)
+  target_link_libraries(imageenc PUBLIC imageioutil webp)
+  target_link_libraries(imageenc PUBLIC webp ${WEBP_DEP_IMG_LIBRARIES})
 
   set_property(TARGET exampleutil
                       imageioutil
@@ -405,7 +419,7 @@ endif()
 if(WEBP_BUILD_GIF2WEBP OR WEBP_BUILD_IMG2WEBP)
   parse_makefile_am(${CMAKE_CURRENT_SOURCE_DIR}/src/mux "WEBP_MUX_SRCS" "")
   add_library(libwebpmux ${WEBP_MUX_SRCS})
-  target_link_libraries(libwebpmux webp)
+  target_link_libraries(libwebpmux PUBLIC webp)
   target_include_directories(libwebpmux
                              PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
                                      ${CMAKE_CURRENT_SOURCE_DIR})
