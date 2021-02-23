@@ -102,7 +102,7 @@ parse_Makefile_am(${WEBP_SRC_DIR}/utils "WEBP_UTILS_COMMON_SRCS" "COMMON")
 parse_Makefile_am(${WEBP_SRC_DIR}/utils "WEBP_UTILS_ENC_SRCS" "ENC")
 parse_Makefile_am(${WEBP_SRC_DIR}/utils "WEBP_UTILS_DEC_SRCS" "decode_[^ ]*")
 
-if(IOS OR TVOS)
+if(APPLE)
   # Support iOS universal build
   list(
       REMOVE_ITEM
@@ -120,6 +120,26 @@ if(IOS OR TVOS)
       "${CMAKE_CURRENT_LIST_DIR}/src/dsp/alpha_processing_sse2.c"
       "${CMAKE_CURRENT_LIST_DIR}/src/dsp/common_sse2.h"
   )
+
+  if(OSX)
+    list(
+        REMOVE_ITEM
+        WEBP_SIMD_FILES_NOT_TO_INCLUDE
+        "${CMAKE_CURRENT_LIST_DIR}/src/dsp/lossless_neon.c"
+        "${CMAKE_CURRENT_LIST_DIR}/src/dsp/cost_neon.c"
+        "${CMAKE_CURRENT_LIST_DIR}/src/dsp/filters_neon.c"
+        "${CMAKE_CURRENT_LIST_DIR}/src/dsp/upsampling_neon.c"
+        "${CMAKE_CURRENT_LIST_DIR}/src/dsp/yuv_neon.c"
+        "${CMAKE_CURRENT_LIST_DIR}/src/dsp/ssim_neon.c"
+        "${CMAKE_CURRENT_LIST_DIR}/src/dsp/rescaler_neon.c"
+        "${CMAKE_CURRENT_LIST_DIR}/src/dsp/lossless_enc_neon.c"
+        "${CMAKE_CURRENT_LIST_DIR}/src/dsp/dec_neon.c"
+        "${CMAKE_CURRENT_LIST_DIR}/src/dsp/enc_neon.c"
+        "${CMAKE_CURRENT_LIST_DIR}/src/dsp/alpha_processing_neon.c"
+        "${CMAKE_CURRENT_LIST_DIR}/src/dsp/common_neon.h"
+    )
+  endif()
+
 endif()
 
 # Remove the files specific to SIMD we don't use.
