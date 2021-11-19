@@ -137,6 +137,10 @@ if(APPLE)
         "${CMAKE_CURRENT_LIST_DIR}/src/dsp/enc_neon.c"
         "${CMAKE_CURRENT_LIST_DIR}/src/dsp/alpha_processing_neon.c"
         "${CMAKE_CURRENT_LIST_DIR}/src/dsp/common_neon.h"
+        "${CMAKE_CURRENT_LIST_DIR}/src/dsp/dec_sse41.c"
+        "${CMAKE_CURRENT_LIST_DIR}/src/dsp/alpha_processing_sse41.c"
+        "${CMAKE_CURRENT_LIST_DIR}/src/dsp/enc_sse41.c"
+        "${CMAKE_CURRENT_LIST_DIR}/src/dsp/lossless_enc_sse41.c"
     )
   endif()
 
