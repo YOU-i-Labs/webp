@@ -35,10 +35,14 @@ WebPUpsampleLinePairFunc WebPUpsamplers[MODE_LAST];
 #define LOAD_UV(u, v) ((u) | ((v) << 16))
 
 #define UPSAMPLE_FUNC(FUNC_NAME, FUNC, XSTEP)                                  \
-static void FUNC_NAME(const uint8_t* top_y, const uint8_t* bottom_y,           \
-                      const uint8_t* top_u, const uint8_t* top_v,              \
-                      const uint8_t* cur_u, const uint8_t* cur_v,              \
-                      uint8_t* top_dst, uint8_t* bottom_dst, int len) {        \
+static void FUNC_NAME(const uint8_t* WEBP_RESTRICT top_y,                      \
+                      const uint8_t* WEBP_RESTRICT bottom_y,                   \
+                      const uint8_t* WEBP_RESTRICT top_u,                      \
+                      const uint8_t* WEBP_RESTRICT top_v,                      \
+                      const uint8_t* WEBP_RESTRICT cur_u,                      \
+                      const uint8_t* WEBP_RESTRICT cur_v,                      \
+                      uint8_t* WEBP_RESTRICT top_dst,                          \
+                      uint8_t* WEBP_RESTRICT bottom_dst, int len) {            \
   int x;                                                                       \
   const int last_pixel_pair = (len - 1) >> 1;                                  \
   uint32_t tl_uv = LOAD_UV(top_u[0], top_v[0]);   /* top-left sample */        \
@@ -136,10 +140,14 @@ static void EmptyUpsampleFunc(const uint8_t* top_y, const uint8_t* bottom_y,
 
 #if !defined(FANCY_UPSAMPLING)
 #define DUAL_SAMPLE_FUNC(FUNC_NAME, FUNC)                                      \
-static void FUNC_NAME(const uint8_t* top_y, const uint8_t* bot_y,              \
-                      const uint8_t* top_u, const uint8_t* top_v,              \
-                      const uint8_t* bot_u, const uint8_t* bot_v,              \
-                      uint8_t* top_dst, uint8_t* bot_dst, int len) {           \
+static void FUNC_NAME(const uint8_t* WEBP_RESTRICT top_y,                      \
+                      const uint8_t* WEBP_RESTRICT bot_y,                      \
+                      const uint8_t* WEBP_RESTRICT top_u,                      \
+                      const uint8_t* WEBP_RESTRICT top_v,                      \
+                      const uint8_t* WEBP_RESTRICT bot_u,                      \
+                      const uint8_t* WEBP_RESTRICT bot_v,                      \
+                      uint8_t* WEBP_RESTRICT top_dst,                          \
+                      uint8_t* WEBP_RESTRICT bot_dst, int len) {               \
   const int half_len = len >> 1;                                               \
   int x;                                                                       \
   assert(top_dst != NULL);                                                     \
@@ -178,10 +186,14 @@ WebPUpsampleLinePairFunc WebPGetLinePairConverter(int alpha_is_last) {
 // YUV444 converter
 
 #define YUV444_FUNC(FUNC_NAME, FUNC, XSTEP)                                    \
-extern void FUNC_NAME(const uint8_t* y, const uint8_t* u, const uint8_t* v,    \
-                      uint8_t* dst, int len);                                  \
-void FUNC_NAME(const uint8_t* y, const uint8_t* u, const uint8_t* v,           \
-               uint8_t* dst, int len) {                                        \
+extern void FUNC_NAME(const uint8_t* WEBP_RESTRICT y,                          \
+                      const uint8_t* WEBP_RESTRICT u,                          \
+                      const uint8_t* WEBP_RESTRICT v,                          \
+                      uint8_t* WEBP_RESTRICT dst, int len);                    \
+void FUNC_NAME(const uint8_t* WEBP_RESTRICT y,                                 \
+               const uint8_t* WEBP_RESTRICT u,                                 \
+               const uint8_t* WEBP_RESTRICT v,                                 \
+               uint8_t* WEBP_RESTRICT dst, int len) {                          \
   int i;                                                                       \
   for (i = 0; i < len; ++i) FUNC(y[i], u[i], v[i], &dst[i * (XSTEP)]);         \
 }
@@ -215,15 +227,12 @@ static void EmptyYuv444Func(const uint8_t* y,
 
 WebPYUV444Converter WebPYUV444Converters[MODE_LAST];
 
+extern VP8CPUInfo VP8GetCPUInfo;
 extern void WebPInitYUV444ConvertersMIPSdspR2(void);
 extern void WebPInitYUV444ConvertersSSE2(void);
+extern void WebPInitYUV444ConvertersSSE41(void);
 
-static volatile VP8CPUInfo upsampling_last_cpuinfo_used1 =
-    (VP8CPUInfo)&upsampling_last_cpuinfo_used1;
-
-WEBP_TSAN_IGNORE_FUNCTION void WebPInitYUV444Converters(void) {
-  if (upsampling_last_cpuinfo_used1 == VP8GetCPUInfo) return;
-
+WEBP_DSP_INIT_FUNC(WebPInitYUV444Converters) {
   WebPYUV444Converters[MODE_RGBA]      = WebPYuv444ToRgba_C;
   WebPYUV444Converters[MODE_BGRA]      = WebPYuv444ToBgra_C;
   WebPYUV444Converters[MODE_RGB]       = WebPYuv444ToRgb_C;
@@ -237,9 +246,14 @@ WEBP_TSAN_IGNORE_FUNCTION void WebPInitYUV444Converters(void) {
   WebPYUV444Converters[MODE_rgbA_4444] = WebPYuv444ToRgba4444_C;
 
   if (VP8GetCPUInfo != NULL) {
-#if defined(WEBP_USE_SSE2)
+#if defined(WEBP_HAVE_SSE2)
     if (VP8GetCPUInfo(kSSE2)) {
       WebPInitYUV444ConvertersSSE2();
+    }
+#endif
+#if defined(WEBP_HAVE_SSE41)
+    if (VP8GetCPUInfo(kSSE4_1)) {
+      WebPInitYUV444ConvertersSSE41();
     }
 #endif
 #if defined(WEBP_USE_MIPS_DSP_R2)
@@ -248,23 +262,18 @@ WEBP_TSAN_IGNORE_FUNCTION void WebPInitYUV444Converters(void) {
     }
 #endif
   }
-  upsampling_last_cpuinfo_used1 = VP8GetCPUInfo;
 }
 
 //------------------------------------------------------------------------------
 // Main calls
 
 extern void WebPInitUpsamplersSSE2(void);
+extern void WebPInitUpsamplersSSE41(void);
 extern void WebPInitUpsamplersNEON(void);
 extern void WebPInitUpsamplersMIPSdspR2(void);
 extern void WebPInitUpsamplersMSA(void);
 
-static volatile VP8CPUInfo upsampling_last_cpuinfo_used2 =
-    (VP8CPUInfo)&upsampling_last_cpuinfo_used2;
-
-WEBP_TSAN_IGNORE_FUNCTION void WebPInitUpsamplers(void) {
-  if (upsampling_last_cpuinfo_used2 == VP8GetCPUInfo) return;
-
+WEBP_DSP_INIT_FUNC(WebPInitUpsamplers) {
 #ifdef FANCY_UPSAMPLING
 #if !WEBP_NEON_OMIT_C_CODE
   WebPUpsamplers[MODE_RGBA]      = UpsampleRgbaLinePair_C;
@@ -282,9 +291,14 @@ WEBP_TSAN_IGNORE_FUNCTION void WebPInitUpsamplers(void) {
 
   // If defined, use CPUInfo() to overwrite some pointers with faster versions.
   if (VP8GetCPUInfo != NULL) {
-#if defined(WEBP_USE_SSE2)
+#if defined(WEBP_HAVE_SSE2)
     if (VP8GetCPUInfo(kSSE2)) {
       WebPInitUpsamplersSSE2();
+    }
+#endif
+#if defined(WEBP_HAVE_SSE41)
+    if (VP8GetCPUInfo(kSSE4_1)) {
+      WebPInitUpsamplersSSE41();
     }
 #endif
 #if defined(WEBP_USE_MIPS_DSP_R2)
@@ -299,7 +313,7 @@ WEBP_TSAN_IGNORE_FUNCTION void WebPInitUpsamplers(void) {
 #endif
   }
 
-#if defined(WEBP_USE_NEON)
+#if defined(WEBP_HAVE_NEON)
   if (WEBP_NEON_OMIT_C_CODE ||
       (VP8GetCPUInfo != NULL && VP8GetCPUInfo(kNEON))) {
     WebPInitUpsamplersNEON();
@@ -310,6 +324,7 @@ WEBP_TSAN_IGNORE_FUNCTION void WebPInitUpsamplers(void) {
   assert(WebPUpsamplers[MODE_BGRA] != NULL);
   assert(WebPUpsamplers[MODE_rgbA] != NULL);
   assert(WebPUpsamplers[MODE_bgrA] != NULL);
+#if !defined(WEBP_REDUCE_CSP) || !WEBP_NEON_OMIT_C_CODE
   assert(WebPUpsamplers[MODE_RGB] != NULL);
   assert(WebPUpsamplers[MODE_BGR] != NULL);
   assert(WebPUpsamplers[MODE_ARGB] != NULL);
@@ -317,9 +332,9 @@ WEBP_TSAN_IGNORE_FUNCTION void WebPInitUpsamplers(void) {
   assert(WebPUpsamplers[MODE_RGB_565] != NULL);
   assert(WebPUpsamplers[MODE_Argb] != NULL);
   assert(WebPUpsamplers[MODE_rgbA_4444] != NULL);
+#endif
 
 #endif  // FANCY_UPSAMPLING
-  upsampling_last_cpuinfo_used2 = VP8GetCPUInfo;
 }
 
 //------------------------------------------------------------------------------

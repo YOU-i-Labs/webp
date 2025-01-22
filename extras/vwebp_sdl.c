@@ -15,6 +15,7 @@
 // Author: James Zern (jzern@google.com)
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #ifdef HAVE_CONFIG_H
 #include "webp/config.h"
@@ -25,11 +26,12 @@
 #include "webp_to_sdl.h"
 #include "webp/decode.h"
 #include "imageio/imageio_util.h"
+#include "../examples/unicode.h"
 
 #if defined(WEBP_HAVE_JUST_SDL_H)
 #include <SDL.h>
 #else
-#include <SDL/SDL.h>
+#include <SDL2/SDL.h>
 #endif
 
 static void ProcessEvents(void) {
@@ -48,32 +50,43 @@ static void ProcessEvents(void) {
   }
 }
 
+// Returns EXIT_SUCCESS on success, EXIT_FAILURE on failure.
 int main(int argc, char* argv[]) {
   int c;
   int ok = 0;
+
+  INIT_WARGV(argc, argv);
+
+  if (argc == 1) {
+    fprintf(stderr, "Usage: %s [-h] image.webp [more_files.webp...]\n",
+            argv[0]);
+    goto Error;
+  }
+
   for (c = 1; c < argc; ++c) {
     const char* file = NULL;
     const uint8_t* webp = NULL;
     size_t webp_size = 0;
     if (!strcmp(argv[c], "-h")) {
       printf("Usage: %s [-h] image.webp [more_files.webp...]\n", argv[0]);
-      return 0;
+      FREE_WARGV_AND_RETURN(EXIT_SUCCESS);
     } else {
-      file = argv[c];
+      file = (const char*)GET_WARGV(argv, c);
     }
     if (file == NULL) continue;
     if (!ImgIoUtilReadFile(file, &webp, &webp_size)) {
-      fprintf(stderr, "Error opening file: %s\n", file);
+      WFPRINTF(stderr, "Error opening file: %s\n", (const W_CHAR*)file);
       goto Error;
     }
     if (webp_size != (size_t)(int)webp_size) {
+      free((void*)webp);
       fprintf(stderr, "File too large.\n");
       goto Error;
     }
-    ok = WebpToSDL((const char*)webp, (int)webp_size);
+    ok = WebPToSDL((const char*)webp, (int)webp_size);
     free((void*)webp);
     if (!ok) {
-      fprintf(stderr, "Error decoding file %s\n", file);
+      WFPRINTF(stderr, "Error decoding file %s\n", (const W_CHAR*)file);
       goto Error;
     }
     ProcessEvents();
@@ -82,12 +95,12 @@ int main(int argc, char* argv[]) {
 
  Error:
   SDL_Quit();
-  return ok ? 0 : 1;
+  FREE_WARGV_AND_RETURN(ok ? EXIT_SUCCESS : EXIT_FAILURE);
 }
 
 #else  // !WEBP_HAVE_SDL
 
-int main(int argc, const char *argv[]) {
+int main(int argc, const char* argv[]) {
   fprintf(stderr, "SDL support not enabled in %s.\n", argv[0]);
   (void)argc;
   return 0;

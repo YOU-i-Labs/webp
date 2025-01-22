@@ -16,6 +16,7 @@
 
 #include <string.h>     // for memcpy()
 #include "src/dec/common_dec.h"
+#include "src/dsp/cpu.h"
 #include "src/dsp/dsp.h"
 #include "src/utils/bit_writer_utils.h"
 #include "src/utils/thread_utils.h"
@@ -30,9 +31,9 @@ extern "C" {
 // Various defines and enums
 
 // version numbers
-#define ENC_MAJ_VERSION 0
-#define ENC_MIN_VERSION 6
-#define ENC_REV_VERSION 1
+#define ENC_MAJ_VERSION 1
+#define ENC_MIN_VERSION 5
+#define ENC_REV_VERSION 0
 
 enum { MAX_LF_LEVELS = 64,       // Maximum loop filter level
        MAX_VARIABLE_LEVEL = 67,  // last (inclusive) level with variable cost
@@ -78,7 +79,6 @@ typedef enum {   // Rate-distortion optimization levels
 extern const uint16_t VP8Scan[16];
 extern const uint16_t VP8UVModeOffsets[4];
 extern const uint16_t VP8I16ModeOffsets[4];
-extern const uint16_t VP8I4ModeOffsets[NUM_BMODES];
 
 // Layout of prediction blocks
 // intra 16x16
@@ -119,6 +119,9 @@ static WEBP_INLINE int QUANTDIV(uint32_t n, uint32_t iQ, uint32_t B) {
 
 // Uncomment the following to remove token-buffer code:
 // #define DISABLE_TOKEN_BUFFER
+
+// quality below which error-diffusion is enabled
+#define ERROR_DIFFUSION_QUALITY 98
 
 //------------------------------------------------------------------------------
 // Headers
@@ -201,6 +204,8 @@ typedef struct {
   score_t i4_penalty_;   // penalty for using Intra4
 } VP8SegmentInfo;
 
+typedef int8_t DError[2 /* u/v */][2 /* top or left */];
+
 // Handy transient struct to accumulate score and info during RD-optimization
 // and mode evaluation.
 typedef struct {
@@ -213,6 +218,7 @@ typedef struct {
   uint8_t modes_i4[16];       // mode numbers for intra4 predictions
   int mode_uv;                // mode number of chroma prediction
   uint32_t nz;                // non-zero blocks
+  int8_t derr[2][3];          // DC diffusion errors for U/V for blocks #1/2/3
 } VP8ModeScore;
 
 // Iterator structure to iterate through macroblocks, pointing to the
@@ -228,7 +234,11 @@ typedef struct {
   VP8BitWriter* bw_;               // current bit-writer
   uint8_t*      preds_;            // intra mode predictors (4x4 blocks)
   uint32_t*     nz_;               // non-zero pattern
+#if WEBP_AARCH64 && BPS == 32
+  uint8_t       i4_boundary_[40];  // 32+8 boundary samples needed by intra4x4
+#else
   uint8_t       i4_boundary_[37];  // 32+5 boundary samples needed by intra4x4
+#endif
   uint8_t*      i4_top_;           // pointer to the current top boundary sample
   int           i4_;               // current intra4x4 mode being tested
   int           top_nz_[9];        // top-non-zero context.
@@ -241,6 +251,9 @@ typedef struct {
   int           count_down_;       // number of mb still to be processed
   int           count_down0_;      // starting counter value (for progress)
   int           percent0_;         // saved initial progress percent
+
+  DError        left_derr_;        // left error diffusion (u/v)
+  DError*       top_derr_;         // top diffusion error - NULL if disabled
 
   uint8_t* y_left_;    // left luma samples (addressable from index -1 to 15).
   uint8_t* u_left_;    // left u samples (addressable from index -1 to 7)
@@ -258,8 +271,6 @@ typedef struct {
   // in iterator.c
 // must be called first
 void VP8IteratorInit(VP8Encoder* const enc, VP8EncIterator* const it);
-// restart a scan
-void VP8IteratorReset(VP8EncIterator* const it);
 // reset iterator position to row 'y'
 void VP8IteratorSetRow(VP8EncIterator* const it, int y);
 // set count down (=number of iterations to go)
@@ -269,7 +280,7 @@ int VP8IteratorIsDone(const VP8EncIterator* const it);
 // Import uncompressed samples from source.
 // If tmp_32 is not NULL, import boundary samples too.
 // tmp_32 is a 32-bytes scratch buffer that must be aligned in memory.
-void VP8IteratorImport(VP8EncIterator* const it, uint8_t* tmp_32);
+void VP8IteratorImport(VP8EncIterator* const it, uint8_t* const tmp_32);
 // export decimated samples
 void VP8IteratorExport(const VP8EncIterator* const it);
 // go to next macroblock. Returns false if not finished.
@@ -277,8 +288,7 @@ int VP8IteratorNext(VP8EncIterator* const it);
 // save the yuv_out_ boundary values to top_/left_ arrays for next iterations.
 void VP8IteratorSaveBoundary(VP8EncIterator* const it);
 // Report progression based on macroblock rows. Return 0 for user-abort request.
-int VP8IteratorProgress(const VP8EncIterator* const it,
-                        int final_delta_percent);
+int VP8IteratorProgress(const VP8EncIterator* const it, int delta);
 // Intra4x4 iterations
 void VP8IteratorStartI4(VP8EncIterator* const it);
 // returns true if not done.
@@ -401,6 +411,7 @@ struct VP8Encoder {
   uint8_t*   uv_top_;    // top u/v samples.
                          // U and V are packed into 16 bytes (8 U + 8 V)
   LFStats*   lf_stats_;  // autofilter stats (if NULL, autofilter is off)
+  DError*    top_derr_;  // diffusion error (NULL if disabled)
 };
 
 //------------------------------------------------------------------------------
@@ -435,9 +446,6 @@ extern const uint8_t VP8Cat6[];
 void VP8MakeLuma16Preds(const VP8EncIterator* const it);
 // Form all the four Chroma8x8 predictions in the yuv_p_ cache
 void VP8MakeChroma8Preds(const VP8EncIterator* const it);
-// Form all the ten Intra4x4 predictions in the yuv_p_ cache
-// for the 4x4 block it->i4_
-void VP8MakeIntra4Preds(const VP8EncIterator* const it);
 // Rate calculation
 int VP8GetCostLuma16(VP8EncIterator* const it, const VP8ModeScore* const rd);
 int VP8GetCostLuma4(VP8EncIterator* const it, const int16_t levels[16]);
@@ -461,7 +469,8 @@ int VP8EncAnalyze(VP8Encoder* const enc);
 // Sets up segment's quantization values, base_quant_ and filter strengths.
 void VP8SetSegmentParams(VP8Encoder* const enc, float quality);
 // Pick best modes and fills the levels. Returns true if skipped.
-int VP8Decimate(VP8EncIterator* const it, VP8ModeScore* const rd,
+int VP8Decimate(VP8EncIterator* WEBP_RESTRICT const it,
+                VP8ModeScore* WEBP_RESTRICT const rd,
                 VP8RDLevel rd_opt);
 
   // in alpha.c
@@ -481,23 +490,28 @@ int VP8FilterStrengthFromDelta(int sharpness, int delta);
 
   // misc utils for picture_*.c:
 
+// Returns true if 'picture' is non-NULL and dimensions/colorspace are within
+// their valid ranges. If returning false, the 'error_code' in 'picture' is
+// updated.
+int WebPValidatePicture(const WebPPicture* const picture);
+
 // Remove reference to the ARGB/YUVA buffer (doesn't free anything).
 void WebPPictureResetBuffers(WebPPicture* const picture);
 
-// Allocates ARGB buffer of given dimension (previous one is always free'd).
-// Preserves the YUV(A) buffer. Returns false in case of error (invalid param,
-// out-of-memory).
-int WebPPictureAllocARGB(WebPPicture* const picture, int width, int height);
+// Allocates ARGB buffer according to set width/height (previous one is
+// always free'd). Preserves the YUV(A) buffer. Returns false in case of error
+// (invalid param, out-of-memory).
+int WebPPictureAllocARGB(WebPPicture* const picture);
 
-// Allocates YUVA buffer of given dimension (previous one is always free'd).
-// Uses picture->csp to determine whether an alpha buffer is needed.
+// Allocates YUVA buffer according to set width/height (previous one is always
+// free'd). Uses picture->csp to determine whether an alpha buffer is needed.
 // Preserves the ARGB buffer.
 // Returns false in case of error (invalid param, out-of-memory).
-int WebPPictureAllocYUVA(WebPPicture* const picture, int width, int height);
+int WebPPictureAllocYUVA(WebPPicture* const picture);
 
-// Clean-up the RGB samples under fully transparent area, to help lossless
-// compressibility (no guarantee, though). Assumes that pic->use_argb is true.
-void WebPCleanupTransparentAreaLossless(WebPPicture* const pic);
+// Replace samples that are fully transparent by 'color' to help compressibility
+// (no guarantee, though). Assumes pic->use_argb is true.
+void WebPReplaceTransparentPixels(WebPPicture* const pic, uint32_t color);
 
 //------------------------------------------------------------------------------
 
@@ -505,4 +519,4 @@ void WebPCleanupTransparentAreaLossless(WebPPicture* const pic);
 }    // extern "C"
 #endif
 
-#endif  /* WEBP_ENC_VP8I_ENC_H_ */
+#endif  // WEBP_ENC_VP8I_ENC_H_

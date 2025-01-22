@@ -13,6 +13,7 @@
 
 #include <string.h>
 
+#include "src/dsp/cpu.h"
 #include "src/enc/vp8i_enc.h"
 
 //------------------------------------------------------------------------------
@@ -26,6 +27,9 @@ static void InitLeft(VP8EncIterator* const it) {
   memset(it->u_left_, 129, 8);
   memset(it->v_left_, 129, 8);
   it->left_nz_[8] = 0;
+  if (it->top_derr_ != NULL) {
+    memset(&it->left_derr_, 0, sizeof(it->left_derr_));
+  }
 }
 
 static void InitTop(VP8EncIterator* const it) {
@@ -33,6 +37,9 @@ static void InitTop(VP8EncIterator* const it) {
   const size_t top_size = enc->mb_w_ * 16;
   memset(enc->y_top_, 127, 2 * top_size);
   memset(enc->nz_, 0, enc->mb_w_ * sizeof(*enc->nz_));
+  if (enc->top_derr_ != NULL) {
+    memset(enc->top_derr_, 0, enc->mb_w_ * sizeof(*enc->top_derr_));
+  }
 }
 
 void VP8IteratorSetRow(VP8EncIterator* const it, int y) {
@@ -48,7 +55,8 @@ void VP8IteratorSetRow(VP8EncIterator* const it, int y) {
   InitLeft(it);
 }
 
-void VP8IteratorReset(VP8EncIterator* const it) {
+// restart a scan
+static void VP8IteratorReset(VP8EncIterator* const it) {
   VP8Encoder* const enc = it->enc_;
   VP8IteratorSetRow(it, 0);
   VP8IteratorSetCountDown(it, enc->mb_w_ * enc->mb_h_);  // default
@@ -76,6 +84,7 @@ void VP8IteratorInit(VP8Encoder* const enc, VP8EncIterator* const it) {
   it->y_left_ = (uint8_t*)WEBP_ALIGN(it->yuv_left_mem_ + 1);
   it->u_left_ = it->y_left_ + 16 + 16;
   it->v_left_ = it->u_left_ + 16;
+  it->top_derr_ = enc->top_derr_;
   VP8IteratorReset(it);
 }
 
@@ -121,7 +130,7 @@ static void ImportLine(const uint8_t* src, int src_stride,
   for (; i < total_len; ++i) dst[i] = dst[len - 1];
 }
 
-void VP8IteratorImport(VP8EncIterator* const it, uint8_t* tmp_32) {
+void VP8IteratorImport(VP8EncIterator* const it, uint8_t* const tmp_32) {
   const VP8Encoder* const enc = it->enc_;
   const int x = it->x_, y = it->y_;
   const WebPPicture* const pic = enc->pic_;
@@ -417,6 +426,15 @@ void VP8IteratorStartI4(VP8EncIterator* const it) {
       it->i4_boundary_[17 + i] = it->i4_boundary_[17 + 15];
     }
   }
+#if WEBP_AARCH64 && BPS == 32 && defined(WEBP_MSAN)
+  // Intra4Preds_NEON() reads 3 uninitialized bytes from i4_boundary_ when top
+  // is positioned at offset 29 (VP8TopLeftI4[3]). The values are not used
+  // meaningfully, but due to limitations in MemorySanitizer related to
+  // modeling of tbl instructions, a warning will be issued. This can be
+  // removed if MSan is updated to support the instructions. See
+  // https://issues.webmproject.org/372109644.
+  memset(it->i4_boundary_ + sizeof(it->i4_boundary_) - 3, 0xaa, 3);
+#endif
   VP8IteratorNzToBytes(it);  // import the non-zero context
 }
 
@@ -450,4 +468,3 @@ int VP8IteratorRotateI4(VP8EncIterator* const it,
 }
 
 //------------------------------------------------------------------------------
-

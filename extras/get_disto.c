@@ -26,6 +26,7 @@
 #include "webp/encode.h"
 #include "imageio/image_dec.h"
 #include "imageio/imageio_util.h"
+#include "../examples/unicode.h"
 
 static size_t ReadPicture(const char* const filename, WebPPicture* const pic,
                           int keep_alpha) {
@@ -48,7 +49,8 @@ static size_t ReadPicture(const char* const filename, WebPPicture* const pic,
 
  End:
   if (!ok) {
-    fprintf(stderr, "Error! Could not process file %s\n", filename);
+    WFPRINTF(stderr, "Error! Could not process file %s\n",
+             (const W_CHAR*)filename);
   }
   free((void*)data);
   return ok ? data_size : 0;
@@ -221,13 +223,15 @@ static void Help(void) {
           "  -o <file> . save the diff map as a WebP lossless file\n"
           "  -scale .... scale the difference map to fit [0..255] range\n"
           "  -gray ..... use grayscale for difference map (-scale)\n"
-          " Also handles PNG, JPG and TIFF files, in addition to WebP.\n");
+          "\nSupported input formats:\n  %s\n",
+          WebPGetEnabledInputFileFormats());
 }
 
-int main(int argc, const char *argv[]) {
+// Returns EXIT_SUCCESS on success, EXIT_FAILURE on failure.
+int main(int argc, const char* argv[]) {
   WebPPicture pic1, pic2;
   size_t size1 = 0, size2 = 0;
-  int ret = 1;
+  int ret = EXIT_FAILURE;
   float disto[5];
   int type = 0;
   int c;
@@ -239,9 +243,11 @@ int main(int argc, const char *argv[]) {
   const char* name2 = NULL;
   const char* output = NULL;
 
+  INIT_WARGV(argc, argv);
+
   if (!WebPPictureInit(&pic1) || !WebPPictureInit(&pic2)) {
     fprintf(stderr, "Can't init pictures\n");
-    return 1;
+    FREE_WARGV_AND_RETURN(EXIT_FAILURE);
   }
 
   for (c = 1; c < argc; ++c) {
@@ -257,17 +263,17 @@ int main(int argc, const char *argv[]) {
       use_gray = 1;
     } else if (!strcmp(argv[c], "-h")) {
       help = 1;
-      ret = 0;
+      ret = EXIT_SUCCESS;
     } else if (!strcmp(argv[c], "-o")) {
       if (++c == argc) {
         fprintf(stderr, "missing file name after %s option.\n", argv[c - 1]);
         goto End;
       }
-      output = argv[c];
+      output = (const char*)GET_WARGV(argv, c);
     } else if (name1 == NULL) {
-      name1 = argv[c];
+      name1 = (const char*)GET_WARGV(argv, c);
     } else {
-      name2 = argv[c];
+      name2 = (const char*)GET_WARGV(argv, c);
     }
   }
   if (help || name1 == NULL || name2 == NULL) {
@@ -290,9 +296,10 @@ int main(int argc, const char *argv[]) {
     fprintf(stderr, "Error while computing the distortion.\n");
     goto End;
   }
-  printf("%u %.2f    %.2f %.2f %.2f %.2f\n",
+  printf("%u %.2f    %.2f %.2f %.2f %.2f [ %.2f bpp ]\n",
          (unsigned int)size1,
-         disto[4], disto[0], disto[1], disto[2], disto[3]);
+         disto[4], disto[0], disto[1], disto[2], disto[3],
+         8.f * size1 / pic1.width / pic1.height);
 
   if (output != NULL) {
     uint8_t* data = NULL;
@@ -331,7 +338,8 @@ int main(int argc, const char *argv[]) {
       fprintf(stderr, "Error during lossless encoding.\n");
       goto End;
     }
-    ret = ImgIoUtilWriteFile(output, data, data_size) ? 0 : 1;
+    ret = ImgIoUtilWriteFile(output, data, data_size) ? EXIT_SUCCESS
+                                                      : EXIT_FAILURE;
     WebPFree(data);
     if (ret) goto End;
 #else
@@ -339,12 +347,13 @@ int main(int argc, const char *argv[]) {
     (void)data_size;
     fprintf(stderr, "Cannot save the difference map. Please recompile "
                     "without the WEBP_REDUCE_CSP flag.\n");
+    goto End;
 #endif  // WEBP_REDUCE_CSP
   }
-  ret = 0;
+  ret = EXIT_SUCCESS;
 
  End:
   WebPPictureFree(&pic1);
   WebPPictureFree(&pic2);
-  return ret;
+  FREE_WARGV_AND_RETURN(ret);
 }

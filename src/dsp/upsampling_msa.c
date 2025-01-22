@@ -264,6 +264,7 @@ static void YuvToBgr(int y, int u, int v, uint8_t* const bgr) {
   bgr[2] = Clip8(r1 >> 6);
 }
 
+#if !defined(WEBP_REDUCE_CSP)
 static void YuvToRgb565(int y, int u, int v, uint8_t* const rgb) {
   const int y1 = MultHi(y, 19077);
   const int r1 = y1 + MultHi(v, 26149) - 14234;
@@ -306,6 +307,7 @@ static void YuvToArgb(uint8_t y, uint8_t u, uint8_t v, uint8_t* const argb) {
   argb[0] = 0xff;
   YuvToRgb(y, u, v, argb + 1);
 }
+#endif  // WEBP_REDUCE_CSP
 
 static void YuvToBgra(uint8_t y, uint8_t u, uint8_t v, uint8_t* const bgra) {
   YuvToBgr(y, u, v, bgra);
@@ -317,8 +319,11 @@ static void YuvToRgba(uint8_t y, uint8_t u, uint8_t v, uint8_t* const rgba) {
   rgba[3] = 0xff;
 }
 
-static void YuvToRgbLine(const uint8_t* y, const uint8_t* u,
-                         const uint8_t* v, uint8_t* dst, int length) {
+#if !defined(WEBP_REDUCE_CSP)
+static void YuvToRgbLine(const uint8_t* WEBP_RESTRICT y,
+                         const uint8_t* WEBP_RESTRICT u,
+                         const uint8_t* WEBP_RESTRICT v,
+                         uint8_t* WEBP_RESTRICT dst, int length) {
   v16u8 R, G, B;
   while (length >= 16) {
     CALC_RGB16(y, u, v, R, G, B);
@@ -344,8 +349,10 @@ static void YuvToRgbLine(const uint8_t* y, const uint8_t* u,
   }
 }
 
-static void YuvToBgrLine(const uint8_t* y, const uint8_t* u,
-                         const uint8_t* v, uint8_t* dst, int length) {
+static void YuvToBgrLine(const uint8_t* WEBP_RESTRICT y,
+                         const uint8_t* WEBP_RESTRICT u,
+                         const uint8_t* WEBP_RESTRICT v,
+                         uint8_t* WEBP_RESTRICT dst, int length) {
   v16u8 R, G, B;
   while (length >= 16) {
     CALC_RGB16(y, u, v, R, G, B);
@@ -370,9 +377,12 @@ static void YuvToBgrLine(const uint8_t* y, const uint8_t* u,
     memcpy(dst, temp, length * 3 * sizeof(*dst));
   }
 }
+#endif  // WEBP_REDUCE_CSP
 
-static void YuvToRgbaLine(const uint8_t* y, const uint8_t* u,
-                          const uint8_t* v, uint8_t* dst, int length) {
+static void YuvToRgbaLine(const uint8_t* WEBP_RESTRICT y,
+                          const uint8_t* WEBP_RESTRICT u,
+                          const uint8_t* WEBP_RESTRICT v,
+                          uint8_t* WEBP_RESTRICT dst, int length) {
   v16u8 R, G, B;
   const v16u8 A = (v16u8)__msa_ldi_b(ALPHAVAL);
   while (length >= 16) {
@@ -399,8 +409,10 @@ static void YuvToRgbaLine(const uint8_t* y, const uint8_t* u,
   }
 }
 
-static void YuvToBgraLine(const uint8_t* y, const uint8_t* u,
-                          const uint8_t* v, uint8_t* dst, int length) {
+static void YuvToBgraLine(const uint8_t* WEBP_RESTRICT y,
+                          const uint8_t* WEBP_RESTRICT u,
+                          const uint8_t* WEBP_RESTRICT v,
+                          uint8_t* WEBP_RESTRICT dst, int length) {
   v16u8 R, G, B;
   const v16u8 A = (v16u8)__msa_ldi_b(ALPHAVAL);
   while (length >= 16) {
@@ -427,8 +439,11 @@ static void YuvToBgraLine(const uint8_t* y, const uint8_t* u,
   }
 }
 
-static void YuvToArgbLine(const uint8_t* y, const uint8_t* u,
-                          const uint8_t* v, uint8_t* dst, int length) {
+#if !defined(WEBP_REDUCE_CSP)
+static void YuvToArgbLine(const uint8_t* WEBP_RESTRICT y,
+                          const uint8_t* WEBP_RESTRICT u,
+                          const uint8_t* WEBP_RESTRICT v,
+                          uint8_t* WEBP_RESTRICT dst, int length) {
   v16u8 R, G, B;
   const v16u8 A = (v16u8)__msa_ldi_b(ALPHAVAL);
   while (length >= 16) {
@@ -455,8 +470,10 @@ static void YuvToArgbLine(const uint8_t* y, const uint8_t* u,
   }
 }
 
-static void YuvToRgba4444Line(const uint8_t* y, const uint8_t* u,
-                              const uint8_t* v, uint8_t* dst, int length) {
+static void YuvToRgba4444Line(const uint8_t* WEBP_RESTRICT y,
+                              const uint8_t* WEBP_RESTRICT u,
+                              const uint8_t* WEBP_RESTRICT v,
+                              uint8_t* WEBP_RESTRICT dst, int length) {
   v16u8 R, G, B, RG, BA, tmp0, tmp1;
   while (length >= 16) {
 #if (WEBP_SWAP_16BIT_CSP == 1)
@@ -491,8 +508,10 @@ static void YuvToRgba4444Line(const uint8_t* y, const uint8_t* u,
   }
 }
 
-static void YuvToRgb565Line(const uint8_t* y, const uint8_t* u,
-                            const uint8_t* v, uint8_t* dst, int length) {
+static void YuvToRgb565Line(const uint8_t* WEBP_RESTRICT y,
+                            const uint8_t* WEBP_RESTRICT u,
+                            const uint8_t* WEBP_RESTRICT v,
+                            uint8_t* WEBP_RESTRICT dst, int length) {
   v16u8 R, G, B, RG, GB, tmp0, tmp1;
   while (length >= 16) {
 #if (WEBP_SWAP_16BIT_CSP == 1)
@@ -526,6 +545,7 @@ static void YuvToRgb565Line(const uint8_t* y, const uint8_t* u,
     memcpy(dst, temp, length * 2 * sizeof(*dst));
   }
 }
+#endif  // WEBP_REDUCE_CSP
 
 #define UPSAMPLE_32PIXELS(a, b, c, d) do {    \
   v16u8 s = __msa_aver_u_b(a, d);             \
@@ -558,11 +578,14 @@ static void YuvToRgb565Line(const uint8_t* y, const uint8_t* u,
 } while (0)
 
 #define UPSAMPLE_FUNC(FUNC_NAME, FUNC, XSTEP)                            \
-static void FUNC_NAME(const uint8_t* top_y, const uint8_t* bot_y,        \
-                      const uint8_t* top_u, const uint8_t* top_v,        \
-                      const uint8_t* cur_u, const uint8_t* cur_v,        \
-                      uint8_t* top_dst, uint8_t* bot_dst, int len)       \
-{                                                                        \
+static void FUNC_NAME(const uint8_t* WEBP_RESTRICT top_y,                \
+                      const uint8_t* WEBP_RESTRICT bot_y,                \
+                      const uint8_t* WEBP_RESTRICT top_u,                \
+                      const uint8_t* WEBP_RESTRICT top_v,                \
+                      const uint8_t* WEBP_RESTRICT cur_u,                \
+                      const uint8_t* WEBP_RESTRICT cur_v,                \
+                      uint8_t* WEBP_RESTRICT top_dst,                    \
+                      uint8_t* WEBP_RESTRICT bot_dst, int len) {         \
   int size = (len - 1) >> 1;                                             \
   uint8_t temp_u[64];                                                    \
   uint8_t temp_v[64];                                                    \
@@ -570,9 +593,9 @@ static void FUNC_NAME(const uint8_t* top_y, const uint8_t* bot_y,        \
   const uint32_t l_uv = ((cur_u[0]) | ((cur_v[0]) << 16));               \
   const uint32_t uv0 = (3 * tl_uv + l_uv + 0x00020002u) >> 2;            \
   const uint8_t* ptop_y = &top_y[1];                                     \
-  uint8_t *ptop_dst = top_dst + XSTEP;                                   \
+  uint8_t* ptop_dst = top_dst + XSTEP;                                   \
   const uint8_t* pbot_y = &bot_y[1];                                     \
-  uint8_t *pbot_dst = bot_dst + XSTEP;                                   \
+  uint8_t* pbot_dst = bot_dst + XSTEP;                                   \
                                                                          \
   FUNC(top_y[0], uv0 & 0xff, (uv0 >> 16), top_dst);                      \
   if (bot_y != NULL) {                                                   \
