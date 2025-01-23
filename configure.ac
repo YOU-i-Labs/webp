@@ -700,7 +700,7 @@ if test "$enable_wic" = "yes"; then
       int main(void) {
         CLSID_WICImagingFactory;
         CoInitialize(NULL);
-        SHCreateStreamOnFile(NULL, 0, NULL);
+        SHCreateStreamOnFileW(NULL, 0, NULL);
         return 0;
       }
       "

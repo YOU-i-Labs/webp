@@ -110,7 +110,11 @@ static HRESULT OpenInputStream(const char* filename, IStream** stream) {
       hr = E_FAIL;
     }
   } else {
-    IFS(SHCreateStreamOnFile((const LPTSTR)filename, STGM_READ, stream));
+#ifdef UNICODE
+    IFS(SHCreateStreamOnFileW((const LPTSTR)filename, STGM_READ, stream));
+#else
+    IFS(SHCreateStreamOnFileA((const LPTSTR)filename, STGM_READ, stream));
+#endif
   }
 
   if (FAILED(hr)) {

@@ -63,8 +63,13 @@ static HRESULT CreateOutputStream(const char* out_file_name,
     // Output to a memory buffer. This is freed when 'stream' is released.
     IFS(CreateStreamOnHGlobal(NULL, TRUE, stream));
   } else {
-    IFS(SHCreateStreamOnFile((const LPTSTR)out_file_name,
-                             STGM_WRITE | STGM_CREATE, stream));
+#ifdef UNICODE
+    IFS(SHCreateStreamOnFileW((const LPTSTR)out_file_name,
+                              STGM_WRITE | STGM_CREATE, stream));
+#else
+    IFS(SHCreateStreamOnFileA((const LPTSTR)out_file_name,
+                              STGM_WRITE | STGM_CREATE, stream));
+#endif
   }
   if (FAILED(hr)) {
     _ftprintf(stderr, _T("Error opening output file %s (%08lx)\n"),
@@ -113,7 +118,7 @@ static HRESULT WriteUsingWIC(const char* out_file_name, int use_stdout,
   IFS(IWICBitmapEncoder_Commit(encoder));
 
   if (SUCCEEDED(hr) && use_stdout) {
-    HGLOBAL image;
+    HGLOBAL image = NULL;
     IFS(GetHGlobalFromStream(stream, &image));
     if (SUCCEEDED(hr)) {
       HANDLE std_output = GetStdHandle(STD_OUTPUT_HANDLE);
