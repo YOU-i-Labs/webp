@@ -925,6 +925,24 @@ static int Quantize2Blocks_NEON(int16_t in[32], int16_t out[32],
 
 #endif   // !WORK_AROUND_GCC
 
+// Older gcc does not define vld1q_u8_x4 type
+#if defined(__GNUC__) && !defined(__clang__) &&                        \
+    ((__GNUC__ <= 13 && defined(__arm__)) ||                           \
+     (__GNUC__ == 10 && __GNUC_MINOR__ < 3 && defined(__aarch64__)) || \
+     (__GNUC__ <= 9 && defined(__aarch64__)))
+static WEBP_INLINE uint8x16x4_t _sse2neon_vld1q_u8_x4(const uint8_t *p) {
+    uint8x16x4_t ret;
+    ret.val[0] = vld1q_u8(p + 0);
+    ret.val[1] = vld1q_u8(p + 16);
+    ret.val[2] = vld1q_u8(p + 32);
+    ret.val[3] = vld1q_u8(p + 48);
+    return ret;
+}
+#ifndef vld1q_u8_x4
+#define vld1q_u8_x4 _sse2neon_vld1q_u8_x4
+#endif    // vld1q_u8_x4
+#endif    // Older __GNUC__
+
 #if WEBP_AARCH64
 
 #if BPS == 32
